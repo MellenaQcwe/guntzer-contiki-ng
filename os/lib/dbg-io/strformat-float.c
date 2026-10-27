@@ -33,6 +33,7 @@
 // From: https://github.com/mpaland/printf/blob/master/printf.c
 // Minor tweaks to get this to work with Contiki-NG's printf
 
+#include <stddef.h>
 #include <strformat-float.h>
 
 #include <float.h>

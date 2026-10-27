@@ -1,4 +1,5 @@
 #include "sliding-window.h"
+#include <stdint.h>
 #include <inttypes.h>
 #include "assert.h"
 
@@ -126,8 +127,12 @@ bool oscore_sliding_window_validate(oscore_sliding_window_t* w, uint64_t incomin
     } else { /* seq < recipient_seq */
         if(!oscore_sliding_window_contains(w, incoming_seq)) {
             LOG_WARN("Replay protection, SEQ outside of replay window "
-                "(incoming_seq=%" PRIu64 ", replay_window_size=%" PRIu8 ", largest_seq=%" PRIu64 ").\n",
-                incoming_seq, OSCORE_DEFAULT_REPLAY_WINDOW, w->largest_seq);
+            "(incoming_seq=%" PRIu64
+            ", replay_window_size=%" PRIu8
+            ", largest_seq=%" PRIu64 ").\n",
+            (uint64_t)incoming_seq,
+            (unsigned int)OSCORE_DEFAULT_REPLAY_WINDOW,
+            (uint64_t)w->largest_seq);
             return false;
         }
 

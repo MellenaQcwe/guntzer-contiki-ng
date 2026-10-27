@@ -173,7 +173,7 @@ oscore_encode_option_value(uint8_t *option_buffer, const cose_encrypt0_t *cose, 
 	  return 0;
   }
   option_buffer[0] = 0;
-  if(cose->partial_iv_len > 0 && cose->partial_iv != NULL && include_partial_iv) {
+  if(cose->partial_iv_len > 0 && include_partial_iv) {
     option_buffer[0] |= (0x07 & cose->partial_iv_len);
     memcpy(&(option_buffer[offset]), cose->partial_iv, cose->partial_iv_len);
     offset += cose->partial_iv_len;

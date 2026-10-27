@@ -32,6 +32,7 @@
 #include "contiki.h"
 
 #include <string.h>
+#include <stddef.h>
 #include <strformat.h>
 #include <strformat-float.h>
 /*---------------------------------------------------------------------------*/
