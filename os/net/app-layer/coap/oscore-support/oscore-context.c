@@ -233,6 +233,12 @@ oscore_set_exchange(const uint8_t *token, uint8_t token_len, uint64_t seq, oscor
     return false;
   }
 
+  oscore_exchange_t *existing = oscore_get_exchange(token, token_len);
+  if(existing != NULL) {
+    LOG_WARN("OSCORE duplicate token detected\n");
+    return false;
+  }
+
   oscore_exchange_t *new_exchange = memb_alloc(&exchange_memb);
   if (new_exchange == NULL) {
     /* If we are at capacity for Endpoint <-> Context associations: */
@@ -248,6 +254,9 @@ oscore_set_exchange(const uint8_t *token, uint8_t token_len, uint64_t seq, oscor
       return false;
     }
   }
+
+  LOG_WARN("OSCORE_EXCHANGE_STORE,seq=%" PRIu64 ",token_len=%u\n",
+         seq, (unsigned)token_len);
 
   memcpy(new_exchange->token, token, token_len);
   new_exchange->token_len = token_len;

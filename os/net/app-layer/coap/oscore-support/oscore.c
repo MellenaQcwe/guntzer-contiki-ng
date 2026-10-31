@@ -356,6 +356,11 @@ oscore_decode_message(coap_message_t *coap_pkt)
       return UNAUTHORIZED_4_01;
     }
 
+    LOG_WARN("OSCORE_RX_RESPONSE,token_len=%u,seq=%llu,ctx=%p\n",
+        (unsigned)coap_pkt->token_len,
+        (unsigned long long)exchange->seq,
+        (void *)exchange->context);
+
     const uint64_t seq = exchange->seq;
     ctx = exchange->context;
 
@@ -406,6 +411,10 @@ oscore_decode_message(coap_message_t *coap_pkt)
   uint8_t tmp_buffer[encrypt_len];
   memcpy(tmp_buffer, coap_pkt->payload, encrypt_len); 
   cose_encrypt0_set_content(cose, coap_pkt->payload, encrypt_len);
+
+  LOG_WARN("OSCORE_DECRYPT_ATTEMPT,payload_len=%u,piv_len=%u\n",
+         (unsigned)coap_pkt->payload_len,
+         (unsigned)cose->partial_iv_len);
 
   int res = cose_encrypt0_decrypt(cose);
   if(res <= 0) {

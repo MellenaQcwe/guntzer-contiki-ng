@@ -101,8 +101,18 @@ PT_THREAD(coap_blocking_request
       context = oscore_get_context_from_ep(remote_ep, uri);
       if(context){
         //TODO maybe an if and random token should be added here
-        static const uint8_t token[2] = {0xA, 0xA};
+        static uint32_t token_counter = 0;
+        uint8_t token[4];
+        token_counter++;
+        token[0] = (uint8_t)(token_counter >> 24);
+        token[1] = (uint8_t)(token_counter >> 16);
+        token[2] = (uint8_t)(token_counter >> 8);
+        token[3] = (uint8_t)token_counter;
         coap_set_token(request, token, sizeof(token));
+
+        // static const uint8_t token[2] = {0xA, 0xA};
+        // coap_set_token(request, token, sizeof(token));
+
         coap_set_oscore(request, context);
       }
     } else {
