@@ -47,7 +47,7 @@
 #include <stdbool.h>
 
 #ifndef EP_CTX_NUM
-#define EP_CTX_NUM 10
+#define EP_CTX_NUM 32
 #endif
 
 /* URI <=> CTX association */
