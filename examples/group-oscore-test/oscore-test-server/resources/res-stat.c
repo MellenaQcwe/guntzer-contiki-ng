@@ -41,6 +41,7 @@
 #include "coap-engine.h"
 #include "sys/energest.h"
 #include "stdio.h"
+#include <inttypes.h>
 
 static void res_get_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset);
 
@@ -55,12 +56,12 @@ static void
 res_get_handler(coap_message_t *request, coap_message_t *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
 {
     printf("\nEnergest:\n");
-    printf(" CPU          %llu LPM      %llus DEEP LPM %llu  Total time %llu\n",
+    printf(" CPU          %" PRIu64 " LPM      %" PRIu64 "s DEEP LPM %" PRIu64 "  Total time %" PRIu64 "\n",
            energest_type_time(ENERGEST_TYPE_CPU),
            energest_type_time(ENERGEST_TYPE_LPM),
            energest_type_time(ENERGEST_TYPE_DEEP_LPM),
            ENERGEST_GET_TOTAL_TIME());
-    printf(" Radio LISTEN %llu TRANSMIT %llu OFF      %llu\n",
+    printf(" Radio LISTEN %" PRIu64 " TRANSMIT %" PRIu64 " OFF      %" PRIu64 "\n",
            energest_type_time(ENERGEST_TYPE_LISTEN),
            energest_type_time(ENERGEST_TYPE_TRANSMIT),
            ENERGEST_GET_TOTAL_TIME()

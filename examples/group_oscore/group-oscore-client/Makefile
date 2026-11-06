@@ -9,6 +9,7 @@ MODULES += os/net/app-layer/coap
 
 MAKE_WITH_GROUPCOM = 1
 MAKE_WITH_OSCORE = 1
+MAKE_WITH_HW_CRYPTO = 0
 
 #dissable Werror for now
 WERROR=0

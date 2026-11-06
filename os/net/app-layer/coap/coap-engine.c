@@ -216,14 +216,33 @@ coap_receive(const coap_endpoint_t *src,
 #else
   coap_status_code = coap_parse_message(message, payload, payload_length);
 #endif /*WITH_GROUPCOM*/
-#ifdef OSCORE_WITH_HW_CRYPTO
-#ifdef CONTIKI_TARGET_ZOUL
-  if(verify_res != 0) {
-	  LOG_DBG("The ECC verification failed with the following code: %u", verify_res);
-	  coap_status_code = OSCORE_DECRYPTION_ERROR;
+
+#ifdef WITH_GROUPCOM
+#ifndef OSCORE_WITH_HW_CRYPTO
+  /* Software ECDSA: 1 = valid, 0 = invalid */
+  if(verify_res != 1) {
+    LOG_ERR("Group OSCORE: invalid signature. Dropping request.\n");
+    return 0;
   }
-#endif /*CONTIKI_TARGET_ZOUL*/
-#endif /*OSCORE_WITH_HW_CRYPTO*/
+#elif defined(CONTIKI_TARGET_ZOUL)
+  /* Zoul hardware ECDSA: 0 = success */
+  if(verify_res != 0) {
+    LOG_ERR("Group OSCORE: hardware signature verification failed.\n");
+    return 0;
+  }
+#else
+  /* Unsupported verification-result convention: fail closed */
+  LOG_ERR("Group OSCORE: unsupported verification backend.\n");
+  return 0;
+#endif
+#endif
+
+#ifdef WITH_GROUPCOM
+  coap_status_code = in_status;
+#else
+  coap_status_code = coap_parse_message(message, payload, payload_length);
+#endif
+
   coap_set_src_endpoint(message, src);
 
   if(coap_status_code == NO_ERROR) {

@@ -56,7 +56,7 @@
 #define LOG_LEVEL LOG_LEVEL_COAP
 
 #ifndef OSCORE_MAX_ID_CONTEXT_LEN
-#define OSCORE_MAX_ID_CONTEXT_LEN 1
+#define OSCORE_MAX_ID_CONTEXT_LEN 3
 #endif
 
 MEMB(exchange_memb, oscore_exchange_t, TOKEN_SEQ_NUM);

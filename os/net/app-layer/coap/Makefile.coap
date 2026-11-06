@@ -106,4 +106,12 @@ ifeq ($(MAKE_WITH_GROUPCOM),1)
     CFLAGS += -DuECC_CURVE=uECC_secp256r1
   endif
 
+  # Software ECDSA for Cooja simulation
+  ifeq ($(TARGET),cooja)
+    MODULES += os/net/app-layer/coap/oscore-support/uecc
+    CFLAGS += -DCCM_STAR_CONF=ccm_star_driver
+    CFLAGS += -DuECC_PLATFORM=uECC_x86_64
+    CFLAGS += -DuECC_CURVE=uECC_secp256r1
+  endif
+
 endif

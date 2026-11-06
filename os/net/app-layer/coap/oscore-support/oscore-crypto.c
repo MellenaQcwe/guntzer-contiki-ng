@@ -491,15 +491,17 @@ typedef struct {
 } sign_state_t;
 
 typedef struct {
-	struct pt pt;
-	struct process *process;
+    struct pt pt;
+    struct process *process;
+    uint8_t verified;
+
 #ifdef OSCORE_WITH_HW_CRYPTO
 #ifdef CONTIKI_TARGET_ZOUL
-	ecc_dsa_verify_state_t ecc_verify_state;
-#endif /* CONTIKI_TARGET_ZOUL */
-#else 
-	struct pt verify_sw_pt;
-#endif /* OSCORE_WITH_HW_CRYPTO */
+    ecc_dsa_verify_state_t ecc_verify_state;
+#endif
+#else
+    struct pt verify_sw_pt;
+#endif
 
 } verify_state_t;
 
@@ -660,7 +662,12 @@ static void finish_SHA256(uECC_HashContext *base, uint8_t *hash_result) {
     dtls_sha256_final(hash_result, &context->ctx);
 }
 
-PT_THREAD(oscore_ecc_sign_deterministic(sign_state_t *state, uint8_t *private_key, uint8_t *message_hash, uECC_HashContext *hash_context, uint8_t *signature))
+PT_THREAD(oscore_ecc_sign_deterministic(
+    sign_state_t *state,
+    const uint8_t *private_key,
+    const uint8_t *message_hash,
+    uECC_HashContext *hash_context,
+    uint8_t *signature))
 {
 	PT_BEGIN(&state->sign_deterministic_pt);
 	uint8_t res = -1;
@@ -672,17 +679,25 @@ PT_THREAD(oscore_ecc_sign_deterministic(sign_state_t *state, uint8_t *private_ke
 	PT_END(&state->sign_deterministic_pt);
 }
 
-PT_THREAD(oscore_ecc_verify_sw(verify_state_t *state, const uint8_t *public_key, const uint8_t *message_hash, const uint8_t *signature))
+PT_THREAD(oscore_ecc_verify_sw(
+    verify_state_t *state,
+    const uint8_t *public_key,
+    const uint8_t *message_hash,
+    const uint8_t *signature))
 {
-	PT_BEGIN(&state->verify_sw_pt);
-	uint8_t res = -1;
-        res = uECC_verify(public_key, message_hash, signature);
-	if(res != 1) {
-		LOG_ERR("Deterministic verify in SW failed with code %d!\n", res);
-		PT_EXIT(&state->verify_sw_pt);
-	}
-	PT_END(&state->verify_sw_pt);
+    PT_BEGIN(&state->verify_sw_pt);
+
+    state->verified =
+        (uECC_verify(public_key, message_hash, signature) == 1);
+
+    if(!state->verified) {
+        LOG_ERR("Software ECDSA signature verification failed\n");
+        PT_EXIT(&state->verify_sw_pt);
+    }
+
+    PT_END(&state->verify_sw_pt);
 }
+
 #endif /*OSCORE_WITH_HW_CRYPTO*/
 
 PT_THREAD(oscore_ecc_sign(sign_state_t *state, const uint8_t *buffer, size_t msg_len, const uint8_t *private_key, const uint8_t *public_key, uint8_t *signature))
@@ -702,7 +717,9 @@ PT_THREAD(oscore_ecc_sign(sign_state_t *state, const uint8_t *buffer, size_t msg
 
 	uint8_t tmp[ES256_PRIVATE_KEY_LEN + ES256_PRIVATE_KEY_LEN + ES256_SIGNATURE_LEN];
 	SHA256_HashContext ctx = {{&init_SHA256, &update_SHA256, &finish_SHA256, 64, 32, tmp}};
- 	PT_SPAWN(&state->pt, &state->sign_deterministic_pt, ecc_sign_deterministic(state, private_key, message_hash, &ctx.uECC, signature));
+ 	PT_SPAWN(&state->pt, &state->sign_deterministic_pt,
+         oscore_ecc_sign_deterministic(state, private_key, message_hash,
+                                      &ctx.uECC, signature));
 
 	state->sig_len = ES256_SIGNATURE_LEN;
 
@@ -833,10 +850,10 @@ PT_THREAD(oscore_ecc_verify(verify_state_t *state, const uint8_t *public_key, co
 	dtls_sha256_init(&msg_hash_ctx);
 	dtls_sha256_update(&msg_hash_ctx, buffer, buffer_len);
 	dtls_sha256_final(message_hash, &msg_hash_ctx);
-	PT_SPAWN(&state->pt, &state->verify_sw_pt, ecc_verify_sw(state, public_key, message_hash, signature));
-#else 
-	uint8_t sha_ret;
+	PT_SPAWN(&state->pt, &state->verify_sw_pt,
+         oscore_ecc_verify_sw(state, public_key, message_hash, signature));
 #ifdef CONTIKI_TARGET_SIMPLELINK
+	uint8_t sha_ret;
 	CryptoKey theirPublicKey;
 	ECDSA_Handle ecdsaHandle;
 	int_fast16_t operationResult;
@@ -947,6 +964,12 @@ oscore_queue_message_to_sign(struct process *process, const uint8_t *private_key
 		LOG_ERR("queue_message_to_sign: out of memory\n");
 		return false;
 	}
+
+	if(message == NULL || message_len > 250) {
+		LOG_ERR("Invalid message or message too large to sign\n");
+		return false;
+	}
+
 	item->process = process;
 	item->private_key = private_key;
 	item->public_key = public_key;
@@ -1045,7 +1068,13 @@ PROCESS_THREAD(oscore_verifier, ev, data)
 			item = (oscore_messages_to_verify_entry_t *) queue_dequeue(oscore_messages_to_verify);
 			static verify_state_t state;
 			state.process = &oscore_verifier;
+			state.verified = 0;
+			item->result = 0;
 			PROCESS_PT_SPAWN(&state.pt, oscore_ecc_verify(&state, item->public_key, item->message, item->message_len, item->signature));
+			#ifndef OSCORE_WITH_HW_CRYPTO
+    		item->result = state.verified;
+			#endif
+
 #ifdef OSCORE_WITH_HW_CRYPTO
 #ifdef CONTIKI_TARGET_ZOUL
 			item->result = state.ecc_verify_state.result;

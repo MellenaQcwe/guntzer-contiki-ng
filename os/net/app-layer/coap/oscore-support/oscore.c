@@ -178,37 +178,35 @@ oscore_encode_option_value(uint8_t *option_buffer, const cose_encrypt0_t *cose, 
     memcpy(&(option_buffer[offset]), cose->partial_iv, cose->partial_iv_len);
     offset += cose->partial_iv_len;
   }
-#ifdef WITH_GROUPCOM
-  //Always set the 4th LSB to 1 and set kid context = Gid. kid = rid.
-  //TODO right now hardcoded to only respond the Java client!
-  uint8_t kid[1] = { 0x52 }; //values taken from Java client and group-oscore-server.c
-  uint8_t gid[3] = { 0x44, 0x61, 0x6c };
-  uint8_t gid_len = 3, kid_len = 1;
-  //add kid_context = group id
-  option_buffer[0] |= 0x10;
-  option_buffer[offset] = gid_len; 
-  offset++;
-  memcpy(&(option_buffer[offset]), gid, gid_len);
-  offset += gid_len;
-  //add kid
-  option_buffer[0] |= 0x08;
-  memcpy(&(option_buffer[offset]), kid, kid_len);
-  offset += kid_len;
-#else
-  if(cose->kid_context_len > 0 && cose->kid_context != NULL) {
+  if(cose->kid_context_len > 0 &&
+    cose->kid_context != NULL) {
+
     option_buffer[0] |= 0x10;
-    option_buffer[offset] = cose->kid_context_len;
-    offset++;
-    memcpy(&(option_buffer[offset]), cose->kid_context, cose->kid_context_len);
+
+    option_buffer[offset++] = cose->kid_context_len;
+
+    memcpy(
+        &option_buffer[offset],
+        cose->kid_context,
+        cose->kid_context_len
+    );
+
     offset += cose->kid_context_len;
   }
 
-  if(cose->key_id_len > 0 && cose->key_id != NULL) {
+  if(cose->key_id_len > 0 &&
+    cose->key_id != NULL) {
+
     option_buffer[0] |= 0x08;
-    memcpy(&(option_buffer[offset]), cose->key_id, cose->key_id_len);
+
+    memcpy(
+        &option_buffer[offset],
+        cose->key_id,
+        cose->key_id_len
+    );
+
     offset += cose->key_id_len;
   }
-#endif
   LOG_DBG("OSCORE encoded option value, len %d, full [",offset);
   LOG_DBG_BYTES(option_buffer, offset);
   LOG_DBG_("]\n");
@@ -490,9 +488,23 @@ oscore_populate_cose(const coap_message_t *pkt, cose_encrypt0_t *cose, const osc
     }
   } else { /* coap is response */
     if(sending){
-      cose->partial_iv_len = u64tob(ctx->recipient_context.sliding_window.recent_seq, cose->partial_iv);
-      cose_encrypt0_set_key_id(cose, ctx->recipient_context.recipient_id, ctx->recipient_context.recipient_id_len);
-      cose_encrypt0_set_key(cose, ctx->sender_context.sender_key, COSE_algorithm_AES_CCM_16_64_128_KEY_LEN);
+      /* Use the local sender's sequence number */
+      cose->partial_iv_len =
+          u64tob(ctx->sender_context.seq, cose->partial_iv);
+
+      /* Identify the device sending this response */
+      cose_encrypt0_set_key_id(
+          cose,
+          ctx->sender_context.sender_id,
+          ctx->sender_context.sender_id_len
+      );
+
+      /* Encrypt using the local sender key */
+      cose_encrypt0_set_key(
+          cose,
+          ctx->sender_context.sender_key,
+          COSE_algorithm_AES_CCM_16_64_128_KEY_LEN
+      );
     } else { /* receiving */
       assert(cose->partial_iv_len > 0); /* Partial IV set when getting seq from exchange. */
       cose_encrypt0_set_key_id(cose, ctx->sender_context.sender_id, ctx->sender_context.sender_id_len);
@@ -559,12 +571,28 @@ oscore_prepare_message(coap_message_t *coap_pkt, uint8_t *buffer)
   cose_encrypt0_set_nonce(cose, nonce_buffer, COSE_algorithm_AES_CCM_16_64_128_IV_LEN);
   
   if(coap_is_request(coap_pkt)) {
-    if(!oscore_set_exchange(coap_pkt->token, coap_pkt->token_len, ctx->sender_context.seq, ctx)) {
+    if(!oscore_set_exchange(
+      coap_pkt->token,
+      coap_pkt->token_len,
+      ctx->sender_context.seq,
+      ctx)) {
+
       LOG_ERR("OSCORE Could not store exchange.\n");
       return PACKET_SERIALIZATION_ERROR;
     }
+  }
+
+  /*
+  * Group OSCORE uses an explicit Partial IV for
+  * outgoing requests and responses.
+  */
+  #ifdef WITH_GROUPCOM
+  oscore_increment_sender_seq(ctx);
+  #else
+  if(coap_is_request(coap_pkt)) {
     oscore_increment_sender_seq(ctx);
   }
+  #endif
 
   /*4 Encrypt the COSE object using the Sender Key*/
   /*Groupcomm 4.2: The payload of the OSCORE messages SHALL encode the ciphertext of the COSE object
@@ -608,7 +636,7 @@ oscore_prepare_message(coap_message_t *coap_pkt, uint8_t *buffer)
   nanocbor_encoder_t sig_enc;
   nanocbor_encoder_init(&sig_enc, sign_encoded_buffer, sizeof(sign_encoded_buffer));
   if (oscore_prepare_sig_structure(&sig_enc, 
-               aad_buffer, nanocbor_encoded_len(&sig_enc),
+               aad_buffer, nanocbor_encoded_len(&int_enc),
                cose->content, ciphertext_len) != NANOCBOR_OK) {
     LOG_ERR("oscore_prepare_sig_structure failed\n");
     return INTERNAL_SERVER_ERROR_5_00;
